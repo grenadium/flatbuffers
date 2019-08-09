@@ -37,6 +37,7 @@
     <Compile Include="ByteBuffer.cs" />
     <Compile Include="FlatBufferBuilder.cs" />
     <Compile Include="FlatBufferConstants.cs" />
+    <Compile Include="FlatBufferCollectionEnumerator.cs" />
     <Compile Include="IFlatbufferCollection.cs" />
     <Compile Include="IFlatbufferObject.cs" />
     <Compile Include="IFlatbufferUnion.cs" />
