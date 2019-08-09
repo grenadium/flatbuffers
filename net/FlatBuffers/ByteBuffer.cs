@@ -383,6 +383,19 @@ namespace FlatBuffers
 #endif
         }
 
+        public void PutBytesFrom(int offset, ByteBuffer sourceBuffer, int sourceOffset, int len)
+        {
+            AssertOffsetAndLength(offset, len);
+            sourceBuffer.AssertOffsetAndLength(sourceOffset, len);
+#if ENABLE_SPAN_T
+            Span<byte> sourceSpan = sourceBuffer._buffer.Span.Slice(sourceOffset, len);
+            Span<byte> destinationSpan = _buffer.Span.Slice(offset, len);
+            sourceSpan.CopyTo(destinationSpan);
+#else
+            Array.Copy(sourceBuffer._buffer.Buffer, sourceOffset, _buffer.Buffer, offset, len);
+#endif
+        }
+
 #if ENABLE_SPAN_T
 
         public void PutSbyte(int offset, sbyte value)

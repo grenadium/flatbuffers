@@ -144,6 +144,11 @@ namespace FlatBuffers
                 Pad(alignSize);
         }
 
+        public void PutBytesFrom(ByteBuffer bb, int bbPos, int len)
+        {
+            _bb.PutBytesFrom(_space -= len, bb, bbPos, len);
+        }
+
         public void PutBool(bool x)
         {
           _bb.PutByte(_space -= sizeof(byte), (byte)(x ? 1 : 0));
