@@ -146,7 +146,7 @@ namespace FlatBuffers
         public T __union<T>(int offset) where T : struct, IFlatbufferObject
         {
             offset += bb_pos;
-            T t = new T();
+            T t = default(T);
             t.__init(offset + bb.GetInt(offset), bb);
             return t;
         }
