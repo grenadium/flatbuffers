@@ -198,5 +198,76 @@ namespace FlatBuffers
             }
             return len_1 - len_2;
         }
+
+        public int __clone_union<TEnum, TUnion>(FlatBufferBuilder builder, TEnum type, int vtableOffset)
+            where TEnum : struct
+            where TUnion : IFlatbufferUnion<TEnum>
+        {
+            int o = __offset(vtableOffset);
+            if (o == 0)
+               return 0;
+
+            TUnion t = default(TUnion);
+            t.__init(type, __indirect(bb_pos + o), bb);
+            return t.Clone(builder);
+        }
+
+        public VectorOffset __clone_vector_union<TUnionCollection>(FlatBufferBuilder builder, int vtableOffsetEnumVector, int vtableOffsetTableVector)
+            where TUnionCollection : struct, IFlatbufferUnionCollection
+        {
+            int oEnum = __offset(vtableOffsetEnumVector);
+            int o = __offset(vtableOffsetTableVector);
+
+            if (oEnum == 0 || o == 0)
+                return new VectorOffset(0);
+
+            TUnionCollection collection = default(TUnionCollection);
+            collection.__init(__indirect(bb_pos + oEnum), __indirect(bb_pos + o), bb);
+            return collection.Clone(builder);
+        }
+
+        // Look up a string field in the vtable, if it exists clone it and return the offset
+        // to the cloned object, else return a null offset
+        public StringOffset __clone_string(FlatBufferBuilder builder, int vtableOffset)
+        {
+            int o = __offset(vtableOffset);
+            return o != 0 ? builder.CloneString(bb, __indirect(bb_pos + o)) : new StringOffset(0);
+        }
+
+        // Look up a vector field in the vtable, if it exists clone it and return the offset
+        // to the cloned object, else return a null offset
+        public VectorOffset __clone_vector<T>(FlatBufferBuilder builder, int vtableOffset)
+            where T : struct, IFlatbufferVector
+        {
+            int o = __offset(vtableOffset);
+            if (o != 0)
+            {
+                T t = default(T);
+                t.__init(__indirect(bb_pos + o), bb);
+                return t.Clone(builder);
+            }
+            else
+            {
+                return new VectorOffset(0);
+            }
+        }
+
+        // Look up a table field in the vtable, if it exists clone it and return the offset
+        // to the cloned object, else return a null offset
+        public Offset<T> __clone_table<T>(FlatBufferBuilder builder, int vtableOffset)
+            where T: struct, IFlatbufferObject<T>
+        {
+            int o = __offset(vtableOffset);
+            if (o != 0)
+            {
+                T t = default(T);
+                t.__init(__indirect(bb_pos + o), bb);
+                return t.Clone(builder);
+            }
+            else
+            {
+                return new Offset<T>(0);
+            }
+        }
     }
 }

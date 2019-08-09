@@ -939,6 +939,39 @@ namespace FlatBuffers
         {
             Finish(rootTable, fileIdentifier, true);
         }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="bb"></param>
+        /// <param name="offset"></param>
+        /// <returns></returns>
+        public StringOffset CloneString(ByteBuffer bb, int offset)
+        {
+            int start_offset = offset + sizeof(int);
+            int len = bb.GetInt(offset);
+
+            AddByte(0);
+            StartVector(1, len, 1);
+            PutBytesFrom(bb, start_offset, len);
+            return new StringOffset(EndVector().Value);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="bb"></param>
+        /// <param name="startOffset"></param>
+        /// <param name="elementSize"></param>
+        /// <param name="count"></param>
+        /// <param name="alignment"></param>
+        /// <returns></returns>
+        public VectorOffset CloneVectorData(ByteBuffer bb, int startOffset, int elementSize, int count, int alignment)
+        {
+            StartVector(elementSize, count, alignment);
+            PutBytesFrom(bb, startOffset, count * elementSize);
+            return EndVector();
+        }
     }
 }
 
