@@ -224,6 +224,17 @@ namespace FlatBuffers
             return SizeOf<T>() * x.Length;
         }
 
+        /// <summary>
+        /// Get the wire-size (in bytes) of an typed ArraySegment
+        /// </summary>
+        /// <typeparam name="T">The type of the ArraySegment</typeparam>
+        /// <param name="x">The array to get the size of</param>
+        /// <returns>The number of bytes the ArraySegment takes on wire</returns>
+        public static int ArraySize<T>(ArraySegment<T> x)
+        {
+            return SizeOf<T>() * x.Count;
+        }
+
 #if ENABLE_SPAN_T
         public static int ArraySize<T>(Span<T> x)
         {
@@ -815,7 +826,22 @@ namespace FlatBuffers
                 throw new ArgumentNullException("Cannot put a null array");
             }
 
-            if (x.Length == 0)
+            return Put<T>(offset, new ArraySegment<T>(x));
+        }
+
+        /// <summary>
+        /// Copies an ArraySegment of type T into this buffer, ending at the given
+        /// offset into this buffer. The starting offset is calculated based on the length
+        /// of the ArraySegment and is the value returned.
+        /// </summary>
+        /// <typeparam name="T">The type of the input data (must be a struct)</typeparam>
+        /// <param name="offset">The offset into this buffer where the copy will end</param>
+        /// <param name="x">The ArraySegment to copy data from</param>
+        /// <returns>The 'start' location of this buffer now, after the copy completed</returns>
+        public int Put<T>(int offset, ArraySegment<T> x)
+            where T : struct
+        {
+            if (x.Count == 0)
             {
                 throw new ArgumentException("Cannot put an empty array");
             }
@@ -835,7 +861,7 @@ namespace FlatBuffers
 #if ENABLE_SPAN_T
                 MemoryMarshal.Cast<T, byte>(x).CopyTo(_buffer.Span.Slice(offset, numBytes));
 #else
-                Buffer.BlockCopy(x, 0, _buffer.Buffer, offset, numBytes);
+                Buffer.BlockCopy(x.Array, x.Offset, _buffer.Buffer, offset, numBytes);
 #endif
             }
             else
