@@ -40,6 +40,7 @@
     <Compile Include="FlatBufferCollectionEnumerator.cs" />
     <Compile Include="FlatBufferReadOnlyCollection.cs" />
     <Compile Include="IFlatbufferCollection.cs" />
+    <Compile Include="IFlatbufferConvertible.cs" />
     <Compile Include="IFlatbufferObject.cs" />
     <Compile Include="IFlatbufferUnion.cs" />
     <Compile Include="IFlatbufferVector.cs" />
