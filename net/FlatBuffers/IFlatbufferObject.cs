@@ -17,12 +17,21 @@
 namespace FlatBuffers
 {
     /// <summary>
-    /// This is the base for both structs and tables.
+    /// Non-generic interface for all Table/Struct types.
     /// </summary>
     public interface IFlatbufferObject
     {
         void __init(int _i, ByteBuffer _bb);
 
         ByteBuffer ByteBuffer { get; }
+    }
+
+    /// <summary>
+    /// Generic interface for all Table/Struct types.
+    /// </summary>
+    public interface IFlatbufferObject<T> : IFlatbufferObject
+        where T : struct, IFlatbufferObject
+    {
+        Offset<T> Clone(FlatBufferBuilder builder);
     }
 }
