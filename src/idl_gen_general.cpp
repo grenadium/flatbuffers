@@ -808,6 +808,18 @@ class GeneralGenerator : public BaseGenerator {
     }
   }
 
+  FieldDef *FindUnionEnumField(const StructDef &struct_def,
+                               const FieldDef &field_def) const {
+    for (auto it = struct_def.fields.vec.begin();
+         it != struct_def.fields.vec.end(); ++it) {
+      auto &field = **it;
+      if (field.name == field_def.name + UnionTypeFieldSuffix()) {
+        return &field;
+      }
+    }
+    return nullptr;
+  }
+
   std::string GenEnumUnionType(const EnumDef &enum_def) const {
     return WrapInNameSpace(enum_def.defined_namespace,
                            "FlatBufferUnionOf" + enum_def.name);
@@ -845,6 +857,172 @@ class GeneralGenerator : public BaseGenerator {
       // Unknown Vector type, return a Vector of bytes
       return vectorBase + "Byte";
     }
+  }
+
+  void GenCloneTablePrepareField(const StructDef &struct_def,
+                                 const FieldDef &field,
+                                 std::string *code_ptr) const {
+    std::string &code = *code_ptr;
+
+    auto &field_type = field.value.type;
+
+    // Only clone this field beforehand if it is not writter inline
+    if (IsScalar(field.value.type.base_type) || IsStruct(field.value.type))
+      return;
+
+    const auto offsetType = GenTypeBasic(field_type);
+    const auto offsetVar = MakeCamel(field.name, false) + "Offset";
+    const auto vtableOffset = NumToString(field.value.offset);
+
+    code += "    ";
+    if (field_type.base_type == BASE_TYPE_UNION)
+      code += "int";
+    else
+      code += GenTypeBasic(field_type);
+    code += " " + MakeCamel(field.name, false) + "Offset";
+    code += " = " + lang_.accessor_prefix;
+
+    if (field_type.base_type == BASE_TYPE_STRING) {
+      code += "__clone_string(builder, ";
+    } else if (field_type.base_type == BASE_TYPE_VECTOR) {
+      if (field_type.element == BASE_TYPE_UNION) {
+        code += "__clone_vector_union<";
+        code += GenVectorType(field_type.VectorType());
+        code += ">(builder, ";
+        auto enum_field_def = FindUnionEnumField(struct_def, field);
+        FLATBUFFERS_ASSERT(enum_field_def != nullptr);
+        code += NumToString(enum_field_def->value.offset);
+        code += ", ";
+      } else {
+        code += "__clone_vector<";
+        code += GenVectorType(field_type.VectorType());
+        code += ">(builder, ";
+      }
+    } else if (field_type.base_type == BASE_TYPE_STRUCT) {
+      code += "__clone_table<";
+      code += GenTypeGet(field_type);
+      code += ">(builder, ";
+    } else if (field_type.base_type == BASE_TYPE_UNION) {
+      code += "__clone_union<";
+      code += field_type.enum_def->name + ", ";
+      code += GenEnumUnionType(*field_type.enum_def) + ">(builder, ";
+      code += MakeCamel(field.name);
+      code += "Type, ";
+    } else {
+      FLATBUFFERS_ASSERT(0);
+    }
+
+    code += vtableOffset + ");\n";
+  }
+
+  void GenCloneTableAddField(const FieldDef &field,
+                             std::string *code_ptr) const {
+    std::string &code = *code_ptr;
+
+    auto &field_type = field.value.type;
+    if (IsScalar(field.value.type.base_type)) {
+      code += "    " + FunctionStart('A') + "dd";
+      code += MakeCamel(field.name) + "(builder, ";
+      code += MakeCamel(field.name);
+      code += ");\n";
+    } else if (field_type.base_type == BASE_TYPE_STRING) {
+      code += "    " + FunctionStart('A') + "dd";
+      code += MakeCamel(field.name) + "(builder, ";
+      code += MakeCamel(field.name, false) + "Offset";
+      code += ");\n";
+    } else if (field_type.base_type == BASE_TYPE_STRUCT &&
+               field_type.struct_def->fixed) {
+      code += "    ";
+      code += GenTypeNameDest(field.value.type);
+      code += lang_.optional_suffix + " ";
+      code += MakeCamel(field.name, false) + "Optional";
+      code += " = " + MakeCamel(field.name) + ";\n";
+      code += "    " + GenTypeBasic(field_type) + " ";
+      code += MakeCamel(field.name, false) + "Offset = \n";
+      code += "      " + MakeCamel(field.name, false) + "Optional";
+      code += ".HasValue ?\n";
+      code += "      " + MakeCamel(field.name, false);
+      code += "Optional.Value.Clone(builder) :\n";
+      code += "      default(";
+      code += GenTypeBasic(field_type) + ");\n";
+      code += "    " + FunctionStart('A') + "dd";
+      code += MakeCamel(field.name) + "(builder, ";
+      code += MakeCamel(field.name, false) + "Offset);\n";
+    } else if (field_type.base_type == BASE_TYPE_VECTOR ||
+               field_type.base_type == BASE_TYPE_ARRAY) {
+      code += "    " + FunctionStart('A') + "dd";
+      code += MakeCamel(field.name) + "(builder, ";
+      code += MakeCamel(field.name, false) + "Offset";
+      code += ");\n";
+    } else if (field_type.base_type == BASE_TYPE_STRUCT &&
+               !field_type.struct_def->fixed) {
+      code += "    " + FunctionStart('A') + "dd";
+      code += MakeCamel(field.name) + "(builder, ";
+      code += MakeCamel(field.name, false) + "Offset);\n";
+    } else if (field_type.base_type == BASE_TYPE_UNION) {
+      code += "    " + FunctionStart('A') + "dd";
+      code += MakeCamel(field.name) + "(builder, ";
+      code += MakeCamel(field.name, false) + "Offset);\n";
+    }
+  }
+
+  void GenCloneMethod(const StructDef &struct_def,
+                      std::string *code_ptr) const {
+    std::string &code = *code_ptr;
+
+    // create a clone function
+    code += "  public " + GenOffsetType(struct_def) + " ";
+    code += FunctionStart('C') + "lone";
+    code += "(FlatBufferBuilder builder) {\n";
+
+    if (struct_def.fixed) {
+      code += "    builder." + FunctionStart('P') + "rep(";
+      code += NumToString(struct_def.minalign) + ", ";
+      code += NumToString(struct_def.bytesize) + ");\n";
+      code += "    builder." + FunctionStart('P') + "utBytesFrom(";
+      code += "__p.bb, __p.bb_pos," + NumToString(struct_def.bytesize) + ");\n";
+      code += "    return ";
+      code += GenOffsetConstruct(
+          struct_def, "builder." + std::string(lang_.get_fbb_offset));
+      code += ";\n";
+    } else {
+      code += "    builder." + FunctionStart('S') + "tartTable(";
+      code += NumToString(struct_def.fields.vec.size()) + ");\n";
+
+      // Step 1: Prepare all fields that cannot be created in-place
+      for (size_t size = struct_def.sortbysize ? sizeof(largest_scalar_t) : 1;
+           size; size /= 2) {
+        for (auto it = struct_def.fields.vec.rbegin();
+             it != struct_def.fields.vec.rend(); ++it) {
+          auto &field = **it;
+          if (!field.deprecated &&
+              (!struct_def.sortbysize ||
+               size == SizeOf(field.value.type.base_type))) {
+            GenCloneTablePrepareField(struct_def, field, code_ptr);
+          }
+        }
+      }
+
+      // Step 2: Add all fields
+      for (size_t size = struct_def.sortbysize ? sizeof(largest_scalar_t) : 1;
+           size; size /= 2) {
+        for (auto it = struct_def.fields.vec.rbegin();
+             it != struct_def.fields.vec.rend(); ++it) {
+          auto &field = **it;
+          if (!field.deprecated &&
+              (!struct_def.sortbysize ||
+               size == SizeOf(field.value.type.base_type))) {
+            GenCloneTableAddField(field, code_ptr);
+          }
+        }
+      }
+
+      code += "    return " + struct_def.name + ".";
+      code += FunctionStart('E') + "nd" + struct_def.name;
+      code += "(builder);\n";
+    }
+
+    code += "  }\n";
   }
 
   // Recusively generate struct construction statements of the form:
@@ -1068,7 +1246,9 @@ class GeneralGenerator : public BaseGenerator {
     }
     code += lang_.accessor_type + struct_def.name;
     if (lang_.language == IDLOptions::kCSharp) {
-      code += " : IFlatbufferObject";
+      code += " : IFlatbufferObject<";
+      code += struct_def.name;
+      code += ">";
       code += lang_.open_curly;
       code += "  private ";
       code += struct_def.fixed ? "Struct" : "Table";
@@ -1778,6 +1958,11 @@ class GeneralGenerator : public BaseGenerator {
       code += "    return null;\n";
       code += "  }\n";
     }
+
+    if (lang_.language == IDLOptions::kCSharp) {
+      GenCloneMethod(struct_def, code_ptr);
+    }
+
     code += "}";
     // Java does not need the closing semi-colon on class definitions.
     code += (lang_.language != IDLOptions::kJava) ? ";" : "";
