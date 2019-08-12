@@ -461,6 +461,25 @@ namespace FlatBuffers
             return EndVector();
         }
 
+        /// <summary>
+        /// Create a vector of strings.
+        /// </summary>
+        /// <param name="stringList">List of strings</param>
+        public VectorOffset CreateVectorOfStrings<TList>(TList stringList) where TList : IList<string>
+        {
+            NotNested();
+            using (CachedArray cache = GetCachedArray(stringList.Count))
+            {
+                int[] offsets = cache.Array;
+                for (int i = stringList.Count - 1; i >= 0; i--)
+                    offsets[i] = CreateString(stringList[i]).Value;
+                StartVector(4, stringList.Count, 4);
+                for (int i = stringList.Count - 1; i >= 0; i--)
+                    AddOffset(offsets[i]);
+                return EndVector();
+            }
+        }
+
         /// @cond FLATBUFFERS_INTENRAL
         public void Nested(int obj)
         {
