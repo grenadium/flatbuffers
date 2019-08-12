@@ -51,6 +51,53 @@ namespace FlatBuffers
         // For CreateSharedString
         private Dictionary<string, StringOffset> _sharedStringMap = null;
 
+        // Cache arrays of offsets to avoid creating garbage
+        // when building vectors
+        private Stack<int[]> _cachedArrays = null;
+
+        /// <summary>
+        /// Cached array wrapper. When disposed, push the array
+        /// on the stack.
+        /// </summary>
+        public struct CachedArray : IDisposable
+        {
+            private readonly FlatBufferBuilder _builder;
+            public int[] Array { get; }
+
+            internal CachedArray(FlatBufferBuilder builder, int[] array)
+            {
+                _builder = builder;
+                Array = array;
+            }
+
+            public void Dispose()
+            {
+                _builder._cachedArrays.Push(Array);
+            }
+        }
+
+        /// <summary>
+        /// Get a cached array of integer with a minimum size.
+        /// </summary>
+        /// <param name="capacity">The minimum size of the array.</param>
+        public CachedArray GetCachedArray(int capacity)
+        {
+            if (_cachedArrays == null)
+                _cachedArrays = new Stack<int[]>();
+
+            if (_cachedArrays.Count != 0)
+            {
+                int[] array = _cachedArrays.Pop();
+                if (array.Length < capacity)
+                    array = new int[capacity];
+                return new CachedArray(this, array);
+            }
+            else
+            {
+                return new CachedArray(this, new int[capacity]);
+            }
+        }
+
         /// <summary>
         /// Create a FlatBufferBuilder with a given initial size.
         /// </summary>
