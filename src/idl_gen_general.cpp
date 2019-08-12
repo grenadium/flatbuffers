@@ -919,6 +919,48 @@ class GeneralGenerator : public BaseGenerator {
     return key_getter;
   }
 
+  void GenFixedStructVectorDef(StructDef &struct_def,
+                               std::string *code_ptr) const {
+    std::string &code = *code_ptr;
+
+    std::string elementSize = NumToString(struct_def.bytesize);
+    std::string alignment = NumToString(struct_def.minalign);
+
+    code += "public struct FlatBufferVectorOf" + struct_def.name +
+            " : IFlatbufferCollection<" + struct_def.name + ">, IFlatbufferVector\n";
+    code += "{\n";
+    code += "  private ByteBuffer _bb;\n";
+    code += "  private int _start_pos;\n";
+    code += "  private int _count;\n\n";
+    code += "  public void __init(int i, ByteBuffer bb)\n";
+    code += "  {\n";
+    code += "    _bb = bb;\n";
+    code += "    _start_pos = i + sizeof(int);\n";
+    code += "    _count = bb.GetInt(i) / " + elementSize + ";\n";
+    code += "  }\n\n";
+    code += "  public ByteBuffer ByteBuffer ";
+    code += "{ get { return _bb; } }\n\n";
+    code += "  public int Count { get { return _count; } }\n\n";
+    code += "  public " + struct_def.name + " this[int index]\n";
+    code += "  {\n";
+    code += "    get\n";
+    code += "    {\n";
+    code += "      int o = _start_pos + " + elementSize + " * index;\n";
+    code +=
+        "      " + struct_def.name + " t = default(" + struct_def.name + ");\n";
+    code += "      t.__init(o, _bb);\n";
+    code += "      return t;\n";
+    code += "    }\n";
+    code += "  }\n\n";
+    code += "  public VectorOffset Clone(FlatBufferBuilder builder)\n";
+    code += "  {\n";
+    code +=
+        "    return builder.CloneVectorData(_bb, _start_pos, " + elementSize;
+    code += ", _count, " + alignment + ");\n";
+    code += "  }\n";
+    code += "}\n\n";
+  }
+
   void GenStruct(StructDef &struct_def, std::string *code_ptr) const {
     if (struct_def.generated) return;
     std::string &code = *code_ptr;
@@ -1662,6 +1704,10 @@ class GeneralGenerator : public BaseGenerator {
     // Java does not need the closing semi-colon on class definitions.
     code += (lang_.language != IDLOptions::kJava) ? ";" : "";
     code += "\n\n";
+
+    if (lang_.language == IDLOptions::kCSharp && struct_def.fixed) {
+      GenFixedStructVectorDef(struct_def, code_ptr);
+    }
   }
   const LanguageParameters &lang_;
   // This tracks the current namespace used to determine if a type need to be
