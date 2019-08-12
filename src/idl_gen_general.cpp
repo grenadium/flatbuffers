@@ -1918,6 +1918,19 @@ class GeneralGenerator : public BaseGenerator {
                 code += ", data." + FunctionStart('L') + "ength, ";
                 code += NumToString(alignment);
                 code += "); builder.Add(data); return builder.EndVector(); }\n";
+
+                // Generate block copy function for ArraySegment<T>
+                code += "  public static " + GenVectorOffsetType() + " ";
+                code += FunctionStart('C') + "reate";
+                code += MakeCamel(field.name);
+                code += "VectorBlock(FlatBufferBuilder builder, ";
+                code +=
+                    "ArraySegment<" + GenTypeBasic(vector_type) + "> data) ";
+                code += "{ builder." + FunctionStart('S') + "tartVector(";
+                code += NumToString(elem_size);
+                code += ", data." + FunctionStart('C') + "ount, ";
+                code += NumToString(alignment);
+                code += "); builder.Add(data); return builder.EndVector(); }\n";
               }
             }
           }
