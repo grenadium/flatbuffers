@@ -128,7 +128,7 @@ const LanguageParameters &GetLangParams(IDLOptions::Language lang) {
         "__p.",
         "Table.",
         "?",
-        "using global::System;\nusing global::FlatBuffers;\n\n",
+        "using global::System;\nusing global::System.Collections.Generic;\nusing global::FlatBuffers;\n\n",
         "",
         "",
         {
@@ -1867,14 +1867,31 @@ class GeneralGenerator : public BaseGenerator {
             code += "  public static " + GenVectorOffsetType() + " ";
             code += FunctionStart('C') + "reate";
             code += MakeCamel(field.name);
-            code += "Vector(FlatBufferBuilder builder, ";
-            code += GenTypeBasic(vector_type) + "[] data) ";
+            code += "Vector";
+            if (lang_.language == IDLOptions::kCSharp)
+              code += "<TList>";
+            code += "(FlatBufferBuilder builder, ";
+            if (lang_.language == IDLOptions::kCSharp)
+              code += "TList";
+            else
+              code += GenTypeBasic(vector_type) + "[]";
+            code += " data) ";
+            if (lang_.language == IDLOptions::kCSharp)
+              code += "where TList : IList<" + GenTypeBasic(vector_type) + "> ";
             code += "{ builder." + FunctionStart('S') + "tartVector(";
             code += NumToString(elem_size);
-            code += ", data." + FunctionStart('L') + "ength, ";
-            code += NumToString(alignment);
+            code += ", data.";
+            if (lang_.language == IDLOptions::kCSharp)
+              code += FunctionStart('C') + "ount";
+            else
+              code += FunctionStart('L') + "ength";
+            code += ", " + NumToString(alignment);
             code += "); for (int i = data.";
-            code += FunctionStart('L') + "ength - 1; i >= 0; i--) builder.";
+            if (lang_.language == IDLOptions::kCSharp)
+              code += FunctionStart('C') + "ount";
+            else
+              code += FunctionStart('L') + "ength";
+            code += " - 1; i >= 0; i--) builder.";
             code += FunctionStart('A') + "dd";
             code += GenMethod(vector_type);
             code += "(";
