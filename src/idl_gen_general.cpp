@@ -859,6 +859,20 @@ class GeneralGenerator : public BaseGenerator {
     }
   }
 
+  std::string GenCollectionType(const Type &type) const {
+    std::string collectionBase = "FlatBufferReadOnlyCollection";
+    if (type.base_type == BASE_TYPE_VECTOR) {
+      return collectionBase + "<" +
+             GenCollectionType(type.VectorType()) + ">";
+    } else if (type.base_type == BASE_TYPE_UNION) {
+      return collectionBase + "<" + GenEnumUnionType(*type.enum_def)
+      + ", " + GenVectorType(type) + ">";
+    } else {
+      return collectionBase + "<" + GenTypeGet(type) + ", " +
+             GenVectorType(type) + ">";
+    }
+  }
+
   void GenCloneTablePrepareField(const StructDef &struct_def,
                                  const FieldDef &field,
                                  std::string *code_ptr) const {
@@ -1529,6 +1543,37 @@ class GeneralGenerator : public BaseGenerator {
         code += lang_.accessor_prefix + "__vector_len(o) : 0; ";
         code += lang_.getter_suffix;
         code += "}\n";
+
+        if (lang_.language == IDLOptions::kCSharp) {
+          std::string collectionType =
+              GenCollectionType(field.value.type.VectorType());
+          std::string vectorType =
+              GenVectorType(field.value.type.VectorType());
+          code += "  public " + collectionType + "? " + MakeCamel(field.name) +
+                  "Collection";
+          code += "{ get {";
+          if (field.value.type.element == BASE_TYPE_UNION) {
+            auto enum_field_def = FindUnionEnumField(struct_def, field);
+            FLATBUFFERS_ASSERT(enum_field_def != nullptr);
+            code += "int oEnum = " + lang_.accessor_prefix + "__offset(";
+            code += NumToString(enum_field_def->value.offset) + "); ";
+          }
+          code += "int o = " + lang_.accessor_prefix + "__offset(" +
+                  NumToString(field.value.offset) + ");";
+          if (field.value.type.element == BASE_TYPE_UNION)
+            code += " if (oEnum !=0 && o != 0) { ";
+          else
+            code += " if (o != 0) { ";
+          code += vectorType + " v = default(" + vectorType + "); v.__init(";
+          if (field.value.type.element == BASE_TYPE_UNION)
+            code += lang_.accessor_prefix + "__indirect(oEnum + " +
+                    lang_.accessor_prefix + "bb_pos), ";
+          code += lang_.accessor_prefix + "__indirect(o + " +
+                  lang_.accessor_prefix + "bb_pos), " + lang_.accessor_prefix +
+                  "bb); return new " + collectionType + "(v); } else { return null; } ";
+          code += "} }\n";
+        }
+
         // See if we should generate a by-key accessor.
         if (field.value.type.element == BASE_TYPE_STRUCT &&
             !field.value.type.struct_def->fixed) {
