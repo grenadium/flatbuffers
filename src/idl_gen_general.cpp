@@ -694,6 +694,45 @@ class GeneralGenerator : public BaseGenerator {
     }
   }
 
+  std::string GenEnumUnionType(const EnumDef &enum_def) const {
+    return WrapInNameSpace(enum_def.defined_namespace,
+                           "FlatBufferUnionOf" + enum_def.name);
+  }
+
+  std::string GenEnumVectorType(const EnumDef &enum_def) const {
+    return WrapInNameSpace(enum_def.defined_namespace,
+                           "FlatBufferVectorOf" + enum_def.name);
+  }
+
+  std::string GenVectorType(const Type &type) const {
+    std::string vectorBase = "FlatBufferVectorOf";
+    if (IsEnum(type)) {
+      return GenEnumVectorType(*type.enum_def);
+    } else if (IsScalar(type.base_type)) {
+      return vectorBase + MakeCamel(GenTypeBasic(type, false));
+    } else if (type.base_type == BASE_TYPE_STRING) {
+      return vectorBase + "String";
+    } else if (type.base_type == BASE_TYPE_VECTOR) {
+      auto vector_type = GenVectorType(type.VectorType());
+      return vectorBase + "Vector<" + vector_type + ">";
+    } else if (type.base_type == BASE_TYPE_STRUCT) {
+      if (type.struct_def->fixed) {
+        // Structs have a generated definition so we wrap the
+        // vector type name in a namespace to avoid name collisions
+        return WrapInNameSpace(type.struct_def->defined_namespace,
+                               vectorBase + type.struct_def->name);
+      } else {
+        auto struct_name = WrapInNameSpace(*type.struct_def);
+        return vectorBase + "Table<" + struct_name + ">";
+      }
+    } else if (type.base_type == BASE_TYPE_UNION) {
+      return "FlatBufferUnionCollectionOf" + type.enum_def->name;
+    } else {
+      // Unknown Vector type, return a Vector of bytes
+      return vectorBase + "Byte";
+    }
+  }
+
   // Recusively generate struct construction statements of the form:
   // builder.putType(name);
   // and insert manual padding.
