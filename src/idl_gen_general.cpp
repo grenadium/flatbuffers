@@ -1983,6 +1983,25 @@ class GeneralGenerator : public BaseGenerator {
                 code += "); builder.Add(data); return builder.EndVector(); }\n";
               }
             }
+          } else {
+            if (lang_.language == IDLOptions::kCSharp) {
+              code += "  public static " + GenVectorOffsetType() + " ";
+              code += FunctionStart('C') + "reate";
+              code += MakeCamel(field.name);
+              code += "Vector<T, TList>(FlatBufferBuilder builder, ";
+              code +=
+                  "TList data) where TList : "
+                  "IList<T> where T : "
+                  "IFlatbufferConvertible<" +
+                  GenTypeGet(vector_type) + ">";
+              code += "{ builder." + FunctionStart('S') + "tartVector(";
+              code += NumToString(elem_size);
+              code += ", data." + FunctionStart('C') + "ount, ";
+              code += NumToString(alignment);
+              code += "); for(int i = data.Count - 1; i >= 0; --i) ";
+              code += "data[i].Write(builder)";
+              code += "; return builder.EndVector(); }\n";
+            }
           }
           // Generate a method to start a vector, data to be added manually
           // after.
