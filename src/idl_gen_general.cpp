@@ -172,7 +172,7 @@ class GeneralGenerator : public BaseGenerator {
         one_file_code += enumcode;
       } else {
         if (!SaveType(enum_def.name, *enum_def.defined_namespace, enumcode,
-                      false))
+                      lang_.language == IDLOptions::kCSharp))
           return false;
       }
     }
@@ -506,6 +506,38 @@ class GeneralGenerator : public BaseGenerator {
     return GenDefaultValueBasic(field, true);
   }
 
+  void GenEnumVectorDef(EnumDef &enum_def, std::string *code_ptr) const {
+    std::string &code = *code_ptr;
+
+    if (enum_def.attributes.Lookup("private")) {
+      code += "internal ";
+    } else {
+      code += "public ";
+    }
+
+    code += "struct FlatBufferVectorOf";
+    code += enum_def.name;
+    code += " : IFlatbufferCollection<";
+    code += enum_def.name;
+    code += ">, IFlatbufferVector\n{\n  ";
+    code += GenVectorType(Type(enum_def.underlying_type.base_type));
+    code += " _vector;\n\n";
+    code += "  public void __init(int i, ByteBuffer bb) ";
+    code += "{ _vector.__init(i, bb); }\n\n";
+    code += "  public ByteBuffer ByteBuffer ";
+    code += "{ get { return _vector.ByteBuffer; } }\n\n";
+    code += "  public int Count";
+    code += "{ get { return _vector.Count; } }\n\n";
+    code += "  public ";
+    code += enum_def.name;
+    code += " this[int index] { get { return (";
+    code += enum_def.name;
+    code += ")_vector[index]; } }\n\n";
+    code += "  public VectorOffset Clone(FlatBufferBuilder builder) ";
+    code += "{ return _vector.Clone(builder); }\n";
+    code += "}\n\n";
+  }
+
   void GenEnum(EnumDef &enum_def, std::string *code_ptr) const {
     std::string &code = *code_ptr;
     if (enum_def.generated) return;
@@ -593,6 +625,10 @@ class GeneralGenerator : public BaseGenerator {
     // Java does not need the closing semi-colon on class definitions.
     code += (lang_.language != IDLOptions::kJava) ? ";" : "";
     code += "\n\n";
+
+    if (lang_.language == IDLOptions::kCSharp) {
+      GenEnumVectorDef(enum_def, code_ptr);
+    }
   }
 
   // Returns the function name that is able to read a value of the given type.
