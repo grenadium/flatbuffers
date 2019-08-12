@@ -1759,47 +1759,93 @@ class GeneralGenerator : public BaseGenerator {
           struct_def, "builder." + std::string(lang_.get_fbb_offset));
       code += ";\n  }\n";
     } else {
-      // Generate a method that creates a table in one go. This is only possible
-      // when the table has no struct fields, since those have to be created
-      // inline, and there's no way to do so in Java.
-      bool has_no_struct_fields = true;
+      // Generate a method that creates a table in one go.
+      // In Java, this is only possible when the table has no struct fields,
+      // since those have to be created inline, and there's no way to do so
+      // in Java.
+      // In C#, allow structs with interface IFlatbufferConvertible<T>
+      int num_struct_fields = 0;
       int num_fields = 0;
       for (auto it = struct_def.fields.vec.begin();
            it != struct_def.fields.vec.end(); ++it) {
         auto &field = **it;
         if (field.deprecated) continue;
         if (IsStruct(field.value.type)) {
-          has_no_struct_fields = false;
+          num_struct_fields++;
+          if (lang_.language == IDLOptions::kCSharp) { num_fields++; }
         } else {
           num_fields++;
         }
       }
       // JVM specifications restrict default constructor params to be < 255.
       // Longs and doubles take up 2 units, so we set the limit to be < 127.
-      if (has_no_struct_fields && num_fields && num_fields < 127) {
+      if ((lang_.language == IDLOptions::kCSharp || num_struct_fields == 0) &&
+          num_fields < 127) {
         // Generate a table constructor of the form:
         // public static int createName(FlatBufferBuilder builder, args...)
         code += "  public static " + GenOffsetType(struct_def) + " ";
         code += FunctionStart('C') + "reate" + struct_def.name;
+        // Generate generic arguments
+        if (lang_.language == IDLOptions::kCSharp && num_struct_fields > 0) {
+          code += "<";
+          bool first = true;
+          for (auto it = struct_def.fields.vec.begin();
+               it != struct_def.fields.vec.end(); ++it) {
+            auto &field = **it;
+            if (field.deprecated || !IsStruct(field.value.type)) continue;
+            if (first) {
+              first = false;
+            } else {
+              code += ", ";
+            }
+            code += "T" + MakeCamel(field.name);
+          }
+          code += ">";
+        }
         code += "(FlatBufferBuilder builder";
         for (auto it = struct_def.fields.vec.begin();
              it != struct_def.fields.vec.end(); ++it) {
           auto &field = **it;
           if (field.deprecated) continue;
           code += ",\n      ";
-          code += GenTypeBasic(DestinationType(field.value.type, false));
+          if (lang_.language == IDLOptions::kCSharp &&
+              IsStruct(field.value.type)) {
+            code += "T" + MakeCamel(field.name);
+          } else {
+            code += GenTypeBasic(DestinationType(field.value.type, false));
+          }
           code += " ";
           code += field.name;
-          if (!IsScalar(field.value.type.base_type)) code += "Offset";
+          if (!IsScalar(field.value.type.base_type) &&
+              !IsStruct(field.value.type))
+            code += "Offset";
 
           // Java doesn't have defaults, which means this method must always
-          // supply all arguments, and thus won't compile when fields are added.
-          if (lang_.language != IDLOptions::kJava) {
+          // supply all arguments, and thus won't compile when fields are
+          // added.
+          if (lang_.language == IDLOptions::kCSharp) {
             code += " = ";
-            code += GenDefaultValueBasic(field);
+            if (IsStruct(field.value.type)) {
+              code += "default(T" + MakeCamel(field.name) + ")";
+            } else {
+              code += GenDefaultValueBasic(field);
+            }
           }
         }
-        code += ") {\n    builder.";
+        code += ")";
+        if (lang_.language == IDLOptions::kCSharp && num_struct_fields > 0) {
+          for (auto it = struct_def.fields.vec.begin();
+               it != struct_def.fields.vec.end(); ++it) {
+            auto &field = **it;
+            if (field.deprecated) continue;
+            if (IsStruct(field.value.type)) {
+              code += "\n    where T" + MakeCamel(field.name) +
+                      " : IFlatbufferConvertible<" +
+                      WrapInNameSpace(*field.value.type.struct_def) + ">";
+            }
+          }
+        }
+        code += " {\n    builder.";
         code += FunctionStart('S') + "tartTable(";
         code += NumToString(struct_def.fields.vec.size()) + ");\n";
         for (size_t size = struct_def.sortbysize ? sizeof(largest_scalar_t) : 1;
@@ -1813,7 +1859,11 @@ class GeneralGenerator : public BaseGenerator {
               code += "    " + struct_def.name + ".";
               code += FunctionStart('A') + "dd";
               code += MakeCamel(field.name) + "(builder, " + field.name;
-              if (!IsScalar(field.value.type.base_type)) code += "Offset";
+              if (lang_.language == IDLOptions::kCSharp &&
+                  IsStruct(field.value.type)) {
+                code += ".Write(builder)";
+              } else if (!IsScalar(field.value.type.base_type))
+                code += "Offset";
               code += ");\n";
             }
           }
