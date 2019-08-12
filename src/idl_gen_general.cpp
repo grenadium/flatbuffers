@@ -1905,16 +1905,20 @@ class GeneralGenerator : public BaseGenerator {
             code += "builder." + FunctionStart('E') + "ndVector(); }\n";
             // For C#, include a block copy method signature.
             if (lang_.language == IDLOptions::kCSharp) {
-              code += "  public static " + GenVectorOffsetType() + " ";
-              code += FunctionStart('C') + "reate";
-              code += MakeCamel(field.name);
-              code += "VectorBlock(FlatBufferBuilder builder, ";
-              code += GenTypeBasic(vector_type) + "[] data) ";
-              code += "{ builder." + FunctionStart('S') + "tartVector(";
-              code += NumToString(elem_size);
-              code += ", data." + FunctionStart('L') + "ength, ";
-              code += NumToString(alignment);
-              code += "); builder.Add(data); return builder.EndVector(); }\n";
+              // For C#, include a block copy method signature.
+              if (IsScalar(vector_type.base_type) && !IsEnum(vector_type)) {
+                // Generate block copy function for Array
+                code += "  public static " + GenVectorOffsetType() + " ";
+                code += FunctionStart('C') + "reate";
+                code += MakeCamel(field.name);
+                code += "VectorBlock(FlatBufferBuilder builder, ";
+                code += GenTypeBasic(vector_type) + "[] data) ";
+                code += "{ builder." + FunctionStart('S') + "tartVector(";
+                code += NumToString(elem_size);
+                code += ", data." + FunctionStart('L') + "ength, ";
+                code += NumToString(alignment);
+                code += "); builder.Add(data); return builder.EndVector(); }\n";
+              }
             }
           }
           // Generate a method to start a vector, data to be added manually
