@@ -462,6 +462,20 @@ namespace FlatBuffers
         }
 
         /// <summary>
+        /// Creates a vector of tables.
+        /// </summary>
+        /// <param name="offsets">Offsets of the tables.</param>
+        public VectorOffset CreateVectorOfTables<T, TList>(TList offsets)
+            where T : struct, IFlatbufferObject
+            where TList : IList<Offset<T>>
+        {
+            NotNested();
+            StartVector(sizeof(int), offsets.Count, sizeof(int));
+            for (int i = offsets.Count - 1; i >= 0; i--) AddOffset(offsets[i].Value);
+            return EndVector();
+        }
+
+        /// <summary>
         /// Create a vector of strings.
         /// </summary>
         /// <param name="stringList">List of strings</param>
