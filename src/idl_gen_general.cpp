@@ -506,6 +506,80 @@ class GeneralGenerator : public BaseGenerator {
     return GenDefaultValueBasic(field, true);
   }
 
+  void GenEnumUnionDef(EnumDef &enum_def, std::string *code_ptr) const {
+    std::string &code = *code_ptr;
+
+    const auto fqEnumName = WrapInNameSpace(enum_def);
+
+    std::string unionTypeName = "FlatBufferUnionOf" + enum_def.name;
+    std::string collectionTypeName = "FlatBufferUnionCollectionOf" + enum_def.name;
+    std::string vectorTypeName = "FlatBufferVectorOf" + enum_def.name;
+
+    code += "public struct " + unionTypeName;
+    code += " : IFlatbufferUnion<";
+    code += fqEnumName;
+    code += ">\n{\n";
+    code += "  private Union<" + fqEnumName + "> __p;\n\n";
+    code += "  public void __init("+ fqEnumName + " type, int i, ByteBuffer bb) ";
+    code += "{ __p = new Union<" + fqEnumName + ">(type, i, bb); }\n\n";
+    code += "  public " + fqEnumName + " Type ";
+    code += "{ get { return __p.type; } }\n\n";
+    code += "  public TTable Get<TTable>() where TTable : struct, IFlatbufferObject<TTable> ";
+    code += "{ return __p.__to<TTable>(); }\n\n";
+
+    code += "  public int Clone(FlatBufferBuilder builder)\n";
+    code += "  {\n";
+    code += "    switch(Type)\n";
+    code += "    {\n";
+
+    for (auto it = enum_def.Vals().begin(); it != enum_def.Vals().end();
+           ++it) {
+      auto &ev = **it;
+
+      if (ev.IsZero()) continue;
+
+      code += "      case ";
+      code += fqEnumName + "." + ev.name + ": ";
+      code += "return Get<";
+      code += GenTypeGet(ev.union_type);
+      code += ">().Clone(builder).Value;\n";
+    }
+
+    code += "      default: return 0;\n";
+    code += "    }\n";
+    code += "  }\n";
+
+    code += "}\n\n";
+
+    code += "public struct " + collectionTypeName;
+    code += " : IFlatbufferCollection<" + unionTypeName;
+    code += ">, IFlatbufferUnionCollection\n{\n";
+    code += "  private " + vectorTypeName + " _enumVector;\n";
+    code += "  private int _tableVectorOffset;\n\n";
+    code += "  public void __init(int enumVectorOffset, ";
+    code += "int tableVectorOffset, ByteBuffer bb) { ";
+    code += "_enumVector.__init(enumVectorOffset, bb); ";
+    code += "_tableVectorOffset = tableVectorOffset; }\n\n";
+    code += "  public VectorOffset Clone(FlatBufferBuilder builder) ";
+    code += "{ return Union<" + fqEnumName + ">.";
+    code += "__clone<" + unionTypeName + ", " + collectionTypeName;
+    code += ">(builder, this); }\n\n";
+    code += "  public int Count ";
+    code += "{ get { return _enumVector.Count; } }\n\n";
+    code += "  public " + unionTypeName + " this[int index]\n";
+    code += "  {\n";
+    code += "    get\n";
+    code += "    {\n";
+    code += "      int o = _tableVectorOffset + sizeof(int) + sizeof(int) * index;\n";
+    code += "      o += _enumVector.ByteBuffer.GetInt(o);\n";
+    code += "      " + unionTypeName + " t = default(" + unionTypeName + ");\n";
+    code += "      t.__init(_enumVector[index], o, _enumVector.ByteBuffer);\n";
+    code += "      return t;\n";
+    code += "    }\n";
+    code += "  }\n";
+    code += "}\n\n";
+  }
+
   void GenEnumVectorDef(EnumDef &enum_def, std::string *code_ptr) const {
     std::string &code = *code_ptr;
 
@@ -625,6 +699,10 @@ class GeneralGenerator : public BaseGenerator {
     // Java does not need the closing semi-colon on class definitions.
     code += (lang_.language != IDLOptions::kJava) ? ";" : "";
     code += "\n\n";
+
+    if (enum_def.is_union && lang_.language == IDLOptions::kCSharp) {
+      GenEnumUnionDef(enum_def, code_ptr);
+    }
 
     if (lang_.language == IDLOptions::kCSharp) {
       GenEnumVectorDef(enum_def, code_ptr);
