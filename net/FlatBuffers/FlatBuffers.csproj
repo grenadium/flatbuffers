@@ -39,10 +39,12 @@
     <Compile Include="FlatBufferConstants.cs" />
     <Compile Include="IFlatbufferCollection.cs" />
     <Compile Include="IFlatbufferObject.cs" />
+    <Compile Include="IFlatbufferUnion.cs" />
     <Compile Include="Offset.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Struct.cs" />
     <Compile Include="Table.cs" />
+    <Compile Include="Union.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it.
